@@ -1,0 +1,103 @@
+name: 🧬 Version
+run-name: Get version with GitVersion
+
+on:
+  workflow_call:
+    outputs:
+      semVer:
+        description: 'GitVersion semantic version'
+        value: ${{ jobs.version.outputs.majorMinorBuild }}
+      nuGetVersion:
+        description: 'GitVersion suffix for NuGet package'
+        value: ${{ jobs.version.outputs.nuGetVersion }}
+      majorMinorBuild:
+        description: 'GitVersion major.minor.build version'
+        value: ${{ jobs.version.outputs.majorMinorBuild }}
+      projectName:
+        description: 'Git repository project name'
+        value: ${{ jobs.version.outputs.projectName }}
+      projectFiles:
+        description: 'Git repository project files'
+        value: ${{ jobs.version.outputs.projectFiles }}
+
+jobs:
+  version:
+    name: Version
+    runs-on: 'ubuntu-latest'
+
+    outputs: # alternative usage: $GitVersion_<outputName>
+      semVer: ${{ steps.gitversion.outputs.semVer }}
+      nuGetVersion: ${{ steps.gitversion.outputs.nuGetVersion }}
+      majorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}
+      projectName: ${{ steps.github_repository.outputs.basename }}
+      projectFiles: ${{ steps.github_repository.outputs.projects }}
+
+    steps:
+    # https://github.com/actions/checkout#fetch-all-history-for-all-tags-and-branches
+    - name: Fetch all tags and branches for GitVersion
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get Git repository project name
+      id: github_repository
+      run: echo "::set-output name=basename::$(basename '${{ github.repository }}')"
+
+    - name: List all project files in the directory
+      shell: bash
+      run: |
+        shopt -s globstar
+        projects=""
+        for project in ./**/*.csproj; do
+          echo "$project"
+          projects+="::$project"
+        done
+
+    # https://github.com/GitTools/actions/blob/main/docs/examples/github/gitversion/setup/usage-examples.md#example-1
+    - name: Set up GitVersion
+      uses: gittools/actions/gitversion/setup@v0
+      with:
+        versionSpec: '5.x'
+
+    # https://github.com/GitTools/actions/blob/main/docs/examples/github/gitversion/execute/usage-examples.md#example-5
+    - name: Use GitVersion to determine version
+      id: gitversion # e.g. steps.gitversion.outputs.<outputName>
+      uses: gittools/actions/gitversion/execute@v0
+
+    # For a list of all GitVersion Version Variables, see https://gitversion.net/docs/reference/variables
+    - run: |
+        echo "Save the GitVersion outputs to a file."
+        echo "${{ steps.gitversion.outputs }}" > version.txt
+
+    # pwsh> dotnet-gitversion | ConvertFrom-Json
+    - if: contains(steps.gitversion.outputs.branchName, 'main')
+      run: |
+        echo "Generate release notes from the Git commit log."
+        last_tag=$(git describe --abbrev=0 --tags)
+        echo '## ${{ env.title }} changes up to $last_tag' > release-notes.txt
+        git log --pretty=format:"- %s" $last_tag..HEAD >> release-notes.txt
+      env:
+        title: '${{ steps.github_repository.outputs.basename }} version ${{ steps.gitversion.outputs.preReleaseLabel }}'
+
+    # https://github.com/actions/upload-artifact
+    - name: Upload version artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.sourceFolder }}
+        path: |
+          version.txt
+          release-notes.txt
+          ${{ inputs.sourceFolder }}
+        retention-days: 1
+        if-no-files-found: error # or 'ignore', defaults to `warn`
+
+    # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary
+    - name: Markdown workflow job summary
+      run: |
+        echo '### ${{ env.WorkflowName }} build summary' >> $GITHUB_STEP_SUMMARY
+        echo "${{ github.repository }} ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+        echo 'Label: ${{ steps.gitversion.outputs.preReleaseLabel }}' >> $GITHUB_STEP_SUMMARY
+        echo 'Version: ${{ steps.gitversion.outputs.fullSemVer }}' >> $GITHUB_STEP_SUMMARY
+        echo 'Commit Date: ${{ steps.gitversion.outputs.commitDate }}' >> $GITHUB_STEP_SUMMARY
+      env:
+        WorkflowName: '${{ steps.github_repository.outputs.basename }} version ${{ steps.gitversion.outputs.semVer }}'
