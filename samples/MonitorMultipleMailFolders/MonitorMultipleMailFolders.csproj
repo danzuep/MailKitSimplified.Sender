@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <WarningsAsErrors>true</WarningsAsErrors>
+    <UserSecretsId>dotnet-WorkerServiceExample-2C375F9E-E9D0-49D0-BA29-55489DEF9D5F</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Common" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\source\MailKitSimplified.Receiver\MailKitSimplified.Receiver.csproj" />
+    <ProjectReference Include="..\..\source\MailKitSimplified.Sender\MailKitSimplified.Sender.csproj" />
+  </ItemGroup>
+
+</Project>
